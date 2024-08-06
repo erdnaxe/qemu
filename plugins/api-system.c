@@ -17,6 +17,7 @@
 #include "hw/boards.h"
 #include "qemu/plugin-memory.h"
 #include "qemu/plugin.h"
+#include "migration/snapshot.h"
 
 /*
  * In system mode we cannot trace the binary being executed so the
@@ -128,4 +129,18 @@ void qemu_plugin_update_ns(const void *handle, int64_t new_time)
                          advance_virtual_time__async,
                          RUN_ON_CPU_HOST_ULONG(new_time));
     }
+}
+
+void qemu_plugin_savevm(const char *tag) {
+    #ifndef CONFIG_USER_ONLY
+    Error *err = NULL;
+
+    bql_lock();
+    save_snapshot(tag, true, NULL, false, NULL, &err);
+    bql_unlock();
+
+    if (err != NULL) {
+        error_reportf_err(err, " savevm error !\n");
+    }
+    #endif
 }
