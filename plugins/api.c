@@ -515,6 +515,22 @@ uint64_t qemu_plugin_u64_sum(qemu_plugin_u64 entry)
     return total;
 }
 
+void qemu_plugin_set_pc(uint64_t pc)
+{
+    CPUClass *cc = CPU_GET_CLASS(current_cpu);
+
+#if defined(TARGET_ARM)
+    ARMCPU *cpu = ARM_CPU(current_cpu);
+    CPUARMState *env = &cpu->env;
+
+    if (env->thumb) {
+        pc |= 1;
+    }
+#endif
+
+    cc->set_pc(current_cpu,  pc);
+}
+
 void qemu_plugin_exit_current_tb(void)
 {
     cpu_loop_exit(current_cpu);
