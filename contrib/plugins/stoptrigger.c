@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2024, Simon Hamelin <simon.hamelin@grenoble-inp.org>
+ * Copyright (C) 2024, Alexandre Iooss <alexandre.iooss@ssi.gouv.fr>
  *
  * Stop execution once a given address is reached or if the
  * count of executed instructions reached a specified limit
@@ -41,6 +42,10 @@ typedef struct {
     int exit_code;
 } ExitInfo;
 
+static char *snapshot_name;
+/* Ensure we left the TB and updated the CPU state before snapshoting */
+bool tb_exited;
+
 static void exit_emulation(int return_code, char *message)
 {
     qemu_plugin_outs(message);
@@ -53,6 +58,20 @@ static void exit_icount_reached(unsigned int cpu_index, void *udata)
     uint64_t insn_vaddr = qemu_plugin_u64_get(current_pc, cpu_index);
     char *msg = g_strdup_printf("icount reached at 0x%" PRIx64 ", exiting\n",
                                 insn_vaddr);
+
+    if (snapshot_name) {
+        if (!tb_exited) {
+            /* First call: exit translation block */
+            tb_exited = true;
+            qemu_plugin_outs(msg);
+            qemu_plugin_exit_current_tb();
+            return;
+        }
+        /* Second call: the CPU state has been updated, save the state then exit */
+        qemu_plugin_savevm(snapshot_name);
+        msg = g_strdup_printf("machine state saved into snapshot '%s' !\n", snapshot_name);
+    }
+
     exit_emulation(icount_exit_code, msg);
 }
 
@@ -61,6 +80,20 @@ static void exit_address_reached(unsigned int cpu_index, void *udata)
     ExitInfo *ei = udata;
     g_assert(ei);
     char *msg = g_strdup_printf("0x%" PRIx64 " reached, exiting\n", ei->exit_addr);
+
+    if (snapshot_name) {
+        if (!tb_exited) {
+            /* First call: exit translation block */
+            tb_exited = true;
+            qemu_plugin_outs(msg);
+            qemu_plugin_exit_current_tb();
+            return;
+        }
+        /* Second call: the CPU state has been updated, save the state then exit */
+        qemu_plugin_savevm(snapshot_name);
+        msg = g_strdup_printf("machine state saved into snapshot '%s' !\n", snapshot_name);
+    }
+
     exit_emulation(ei->exit_code, msg);
 }
 
@@ -79,7 +112,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 insn, QEMU_PLUGIN_INLINE_STORE_U64, current_pc, insn_vaddr);
             qemu_plugin_register_vcpu_insn_exec_cond_cb(
                 insn, exit_icount_reached, QEMU_PLUGIN_CB_NO_REGS,
-                QEMU_PLUGIN_COND_EQ, insn_count, icount + 1, NULL);
+                QEMU_PLUGIN_COND_GE, insn_count, icount + 1, NULL);
         }
 
         if (exit_on_address) {
@@ -138,6 +171,8 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
             }
             g_hash_table_insert(addrs_ht, &ei->exit_addr, ei);
             exit_on_address = true;
+        } else if (g_strcmp0(tokens[0], "savevm") == 0) {
+            snapshot_name = g_strdup(tokens[1]);
         } else {
             fprintf(stderr, "option parsing failed: %s\n", opt);
             return -1;
