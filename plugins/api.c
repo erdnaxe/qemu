@@ -46,6 +46,7 @@
 #include "exec/translator.h"
 #include "disas/disas.h"
 #include "plugin.h"
+#include "capstone.h"
 
 /* Uninstall and Reset handlers */
 
@@ -305,6 +306,12 @@ char *qemu_plugin_insn_disas(const struct qemu_plugin_insn *insn)
                         insn->vaddr, insn->len);
 }
 
+GPtrArray *qemu_plugin_insn_disas_written_regs(const struct qemu_plugin_insn *insn)
+{
+    return plugin_disas_written_regs(tcg_ctx->cpu, tcg_ctx->plugin_db,
+                        insn->vaddr, insn->len);
+}
+
 const char *qemu_plugin_insn_symbol(const struct qemu_plugin_insn *insn)
 {
     const char *sym = lookup_symbol(insn->vaddr);
@@ -462,6 +469,13 @@ int qemu_plugin_read_register(struct qemu_plugin_register *reg, GByteArray *buf)
     return gdb_read_register(current_cpu, buf, GPOINTER_TO_INT(reg) - 1);
 }
 
+int qemu_plugin_write_register(struct qemu_plugin_register *reg, uint8_t *mem_buf)
+{
+    g_assert(current_cpu);
+
+    return gdb_write_register(current_cpu, mem_buf, GPOINTER_TO_INT(reg) - 1);
+}
+
 struct qemu_plugin_scoreboard *qemu_plugin_scoreboard_new(size_t element_size)
 {
     return plugin_scoreboard_new(element_size);
@@ -519,6 +533,7 @@ void qemu_plugin_set_pc(uint64_t pc)
 {
     CPUClass *cc = CPU_GET_CLASS(current_cpu);
 
+    /* FIXME
 #if defined(TARGET_ARM)
     ARMCPU *cpu = ARM_CPU(current_cpu);
     CPUARMState *env = &cpu->env;
@@ -527,6 +542,7 @@ void qemu_plugin_set_pc(uint64_t pc)
         pc |= 1;
     }
 #endif
+    */
 
     cc->set_pc(current_cpu,  pc);
 }
