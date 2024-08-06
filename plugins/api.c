@@ -52,6 +52,7 @@
 #include "exec/ram_addr.h"
 #include "qemu/plugin-memory.h"
 #include "hw/boards.h"
+#include "migration/snapshot.h"
 #else
 #include "qemu.h"
 #ifdef CONFIG_LINUX
@@ -680,4 +681,23 @@ void qemu_plugin_update_ns(const void *handle, int64_t new_time)
                          RUN_ON_CPU_HOST_ULONG(new_time));
     }
 #endif
+}
+
+void qemu_plugin_exit_current_tb(void)
+{
+    cpu_loop_exit(current_cpu);
+}
+
+void qemu_plugin_savevm(const char *tag) {
+    #ifndef CONFIG_USER_ONLY
+    Error *err = NULL;
+
+    bql_lock();
+    save_snapshot(tag, true, NULL, false, NULL, &err);
+    bql_unlock();
+
+    if (err != NULL) {
+        error_reportf_err(err, " savevm error !\n");
+    }
+    #endif
 }
