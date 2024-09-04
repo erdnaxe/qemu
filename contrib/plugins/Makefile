@@ -32,6 +32,7 @@ NAMES += ips
 NAMES += stoptrigger
 NAMES += skipinsn
 NAMES += stuckat
+NAMES += sca_hw
 
 ifeq ($(CONFIG_WIN32),y)
 SO_SUFFIX := .dll
