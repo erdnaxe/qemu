@@ -57,6 +57,9 @@ static void *access_ptr(X86Access *ac, vaddr addr, unsigned len)
     vaddr offset = addr - ac->vaddr;
 
     assert(addr >= ac->vaddr);
+    if (!ac->haddr1) {
+        return NULL;
+    }
 
     /* No haddr means probe_access wants to force slow path */
     if (!ac->haddr1) {
